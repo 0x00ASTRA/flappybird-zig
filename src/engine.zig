@@ -97,27 +97,56 @@ pub const Engine = struct {
     pub fn run(self: *Engine) !void {
         const tx = self.textures.get("test.png").?;
         const tex = tx;
+        var tick: u64 = 0;
+        // var rot_rate: f32 = 3; // 3 degrees per sec
+        var pos_x: i32 = 400;
+        var pos_y: i32 = 400;
+        var speed: i32 = 20;
+
         while (!self.shouldClose()) {
-            // try self.lua.call(.{ "update", .{} })
 
+            // #######################################
+            // #               Input                 #
+            // #######################################
+
+            if (rl.isKeyPressed(.left_shift)) {
+                const new_speed = speed + 1;
+                speed = std.math.clamp(new_speed, 0, 500);
+            }
+
+            if (rl.isKeyPressed(.left_control)) {
+                const new_speed = speed - 1;
+                speed = std.math.clamp(new_speed, 0, 500);
+            }
+
+            if (rl.isKeyDown(.down)) {
+                const new_pos_y = pos_y + speed;
+                pos_y = std.math.clamp(new_pos_y, 30, 770);
+            }
+
+            if (rl.isKeyDown(.up)) {
+                const new_pos_y = pos_y - speed;
+                pos_y = std.math.clamp(new_pos_y, 30, 770);
+            }
+
+            if (rl.isKeyDown(.right)) {
+                const new_pos_x = pos_x + speed;
+                pos_x = std.math.clamp(new_pos_x, 30, 770);
+            }
+
+            if (rl.isKeyDown(.left)) {
+                const new_pos_x = pos_x - speed;
+                pos_x = std.math.clamp(new_pos_x, 30, 770);
+            }
+
+            const tick_msg: [:0]const u8 = std.fmt.allocPrintZ(self.allocator, "tick: {}", .{tick}) catch "error";
             self.renderer.draw(@constCast(&[_]render.Drawable{
-                render.Drawable{ .circle = .{ .x = 400, .y = 400, .radius = 30.0, .color = .red } },
-                render.Drawable{ .texture = .{ .texture = tex, .position = .{ .x = 0, .y = 0 }, .rotation = 0, .scale = 0.25, .tint = .white } },
+                render.Drawable{ .texture = .{ .texture = tex, .position = .{ .x = 400, .y = 400 }, .rotation = 0, .scale = 0.5, .tint = .white } },
+                render.Drawable{ .circle = .{ .x = pos_x, .y = pos_y, .radius = 30.0, .color = .red } },
+                render.Drawable{ .text = .{ .message = tick_msg, .x = 5, .y = 5, .size = 11, .color = .red } },
+                render.Drawable{ .fps = .{ .x = 5, .y = 17 } },
             }));
-            // try self.lua.call(.{ "render", .{} });
-        }
-    }
-
-    // Hot-reload the Lua VM and re-use existing bindings
-    pub fn reload(self: *Engine) !void {
-        self.lua.deinit();
-        const lua = try Lua.init(self.allocator);
-        try lua.openLibs();
-        try lua.doFile("scripts/engine/init.lua");
-        self.lua = lua;
-
-        inline for (self.bindings.items) |b| {
-            try self.lua.setFn(b.name, b.func);
+            tick += 1;
         }
     }
 };

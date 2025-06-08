@@ -10,6 +10,7 @@ pub const Drawable = union(enum) {
     text: struct { message: [:0]const u8, x: i32, y: i32, size: i32, color: rl.Color },
     // rl.drawTextureEx(texture: Texture2D, position: Vector2, rotation: f32, scale: f32, tint: Color)
     texture: struct { texture: rl.Texture2D, position: rl.Vector2, rotation: f32, scale: f32, tint: rl.Color },
+    fps: struct { x: i32, y: i32 },
 };
 
 pub const WindowConfig = struct {
@@ -70,7 +71,13 @@ pub const Renderer = struct {
                     rl.drawText(t.message, t.x, t.y, t.size, t.color);
                 },
                 .texture => |t| {
-                    rl.drawTextureEx(t.texture, t.position, t.rotation, t.scale, t.tint);
+                    const pos_x_offset: f32 = @divFloor(@as(f32, @floatFromInt(t.texture.width)), 2) * t.scale;
+                    const pos_y_offset: f32 = @divFloor(@as(f32, @floatFromInt(t.texture.height)), 2) * t.scale;
+                    const pos: rl.Vector2 = rl.Vector2{ .x = t.position.x - pos_x_offset, .y = t.position.y - pos_y_offset };
+                    rl.drawTextureEx(t.texture, pos, t.rotation, t.scale, t.tint);
+                },
+                .fps => |f| {
+                    rl.drawFPS(f.x, f.y);
                 },
             }
         }
