@@ -1,0 +1,78 @@
+const std = @import("std");
+const rl = @import("raylib");
+const toml = @import("toml");
+
+pub const EWindowMode = enum { windowed, fullscreen, borderless };
+
+pub const Drawable = union(enum) {
+    circle: struct { x: i32, y: i32, radius: f32, color: rl.Color },
+    rect: struct { x: i32, y: i32, width: i32, height: i32, color: rl.Color },
+    text: struct { message: [:0]const u8, x: i32, y: i32, size: i32, color: rl.Color },
+    // rl.drawTextureEx(texture: Texture2D, position: Vector2, rotation: f32, scale: f32, tint: Color)
+    texture: struct { texture: rl.Texture2D, position: rl.Vector2, rotation: f32, scale: f32, tint: rl.Color },
+};
+
+pub const WindowConfig = struct {
+    width: i32,
+    height: i32,
+    title: []const u8, // slice, parsed from TOML
+    mode: EWindowMode,
+    target_fps: i32,
+};
+
+pub const Renderer = struct {
+    allocator: std.mem.Allocator,
+    config: WindowConfig,
+    title_cstr: [:0]const u8, // null-terminated title for raylib
+
+    pub fn init(allocator: std.mem.Allocator, cfg_filename: []const u8) !Renderer {
+        var parser = toml.Parser(WindowConfig).init(allocator);
+        defer parser.deinit();
+
+        const cfg = try parser.parseFile(cfg_filename);
+        const val = cfg.value;
+
+        const title_cstr = try allocator.dupeZ(u8, val.title);
+
+        rl.initWindow(val.width, val.height, title_cstr);
+        rl.setTargetFPS(val.target_fps);
+
+        return Renderer{
+            .allocator = allocator,
+            .config = val,
+            .title_cstr = title_cstr,
+        };
+    }
+    pub fn deinit(self: *Renderer) void {
+        rl.closeWindow();
+        _ = self;
+        // self.allocator.free(self.title_cstr);
+    }
+
+    pub fn draw(self: *Renderer, drawables: []Drawable) void {
+        rl.beginDrawing();
+        defer rl.endDrawing();
+        _ = self;
+
+        rl.clearBackground(.black);
+
+        if (drawables.len == 0) return;
+
+        for (drawables) |item| {
+            switch (item) {
+                .circle => |c| {
+                    rl.drawCircle(c.x, c.y, c.radius, c.color);
+                },
+                .rect => |r| {
+                    rl.drawRectangle(r.x, r.y, r.width, r.height, r.color);
+                },
+                .text => |t| {
+                    rl.drawText(t.message, t.x, t.y, t.size, t.color);
+                },
+                .texture => |t| {
+                    rl.drawTextureEx(t.texture, t.position, t.rotation, t.scale, t.tint);
+                },
+            }
+        }
+    }
+};

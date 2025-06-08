@@ -1,0 +1,5 @@
+width = 800
+height = 800
+title = "Flappy Bird"
+mode = "windowed"
+target_fps = 165
