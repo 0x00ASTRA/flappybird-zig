@@ -72,6 +72,50 @@ fn draw_texture(lua: *Lua) c_int {
     return 0;
 }
 
+fn get_texture_width(lua: *Lua) c_int {
+    const engine = getEngine(lua) catch |err| {
+        std.debug.print("get_texture_width error: could not get engine pointer: {s}\n", .{@errorName(err)});
+        return 0;
+    };
+
+    if (lua.getTop() < 2) {
+        std.debug.print("get_texture_width error: 2 arguments required. (texture: string, scale: float) \n", .{});
+        return 0;
+    }
+
+    const tname: [:0]const u8 = lua.toString(1) catch undefined;
+    const t = engine.asset_manager.getTexture(tname) orelse {
+        std.debug.print("draw_texture warning: texture '{s}' not found.\n", .{tname});
+        return 0;
+    };
+    const scale: f32 = @floatCast(lua.toNumber(2) catch 1.0);
+    const num: f32 = @as(f32, @floatFromInt(t.width)) * scale;
+    lua.pushNumber(num);
+    return 1;
+}
+
+fn get_texture_height(lua: *Lua) c_int {
+    const engine = getEngine(lua) catch |err| {
+        std.debug.print("get_texture_height error: could not get engine pointer: {s}\n", .{@errorName(err)});
+        return 0;
+    };
+
+    if (lua.getTop() < 2) {
+        std.debug.print("get_texture_height error: 2 arguments required. (texture: string, scale: float) \n", .{});
+        return 0;
+    }
+
+    const tname: [:0]const u8 = lua.toString(1) catch undefined;
+    const t = engine.asset_manager.getTexture(tname) orelse {
+        std.debug.print("draw_texture warning: texture '{s}' not found.\n", .{tname});
+        return 0;
+    };
+    const scale: f32 = @floatCast(lua.toNumber(2) catch 1.0);
+    const num: f32 = @as(f32, @floatFromInt(t.height)) * scale;
+    lua.pushNumber(num);
+    return 1;
+}
+
 /// Queues a circle to be drawn.
 /// Lua API: Engine:draw_circle(x, y, radius, r, g, b, a)
 fn draw_circle(lua: *Lua) c_int {
@@ -166,6 +210,8 @@ pub const Scripting = struct {
 
         // --- Bind all functions to the 'Engine' table ---
         try addEngineFunc(self.lua, engine_ptr, "draw_texture", zlua.wrap(draw_texture));
+        try addEngineFunc(self.lua, engine_ptr, "get_texture_width", zlua.wrap(get_texture_width));
+        try addEngineFunc(self.lua, engine_ptr, "get_texture_height", zlua.wrap(get_texture_height));
         try addEngineFunc(self.lua, engine_ptr, "draw_circle", zlua.wrap(draw_circle));
 
         try addEngineFunc(self.lua, engine_ptr, "is_key_down", zlua.wrap(is_key_down));
