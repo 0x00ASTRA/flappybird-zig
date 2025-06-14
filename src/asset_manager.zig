@@ -56,9 +56,9 @@ pub const AssetManager = struct {
         std.debug.print("\x1b[32m[ DONE ]\x1b[0m Finished Loading Textures.\n", .{});
     }
 
-    pub fn getTexture(self: *AssetManager, name: [:0]const u8) ?*rl.Texture2D {
+    pub fn getTexture(self: *AssetManager, name: [:0]const u8) ?rl.Texture2D {
         if (self.textures.get(name)) |t| {
-            return @constCast(&t);
+            return t;
         } else {
             return null;
         }

@@ -25,8 +25,6 @@ pub const Renderer = struct {
     allocator: std.mem.Allocator,
     config: WindowConfig,
     title_cstr: [:0]const u8,
-    // DESIGN FLAW FIX: Use a queue to batch draw calls for performance.
-    // Instead of drawing one item at a time, we'll add them to this list.
     draw_queue: std.ArrayList(Drawable),
 
     pub fn init(allocator: std.mem.Allocator, cfg_filename: []const u8) !Renderer {
@@ -36,7 +34,6 @@ pub const Renderer = struct {
         const cfg = try parser.parseFile(cfg_filename);
         const val = cfg.value;
 
-        // Keep the duplicated string so we can free it later.
         const title_cstr = try allocator.dupeZ(u8, val.title);
 
         rl.initWindow(val.width, val.height, title_cstr);
@@ -46,28 +43,24 @@ pub const Renderer = struct {
             .allocator = allocator,
             .config = val,
             .title_cstr = title_cstr,
-            // Initialize the draw queue.
             .draw_queue = std.ArrayList(Drawable).init(allocator),
         };
     }
 
     pub fn deinit(self: *Renderer) void {
-        // Deinitialize the queue to free its memory.
         self.draw_queue.deinit();
 
-        // MEMORY LEAK FIX: Free the title string we allocated in init.
         self.allocator.free(self.title_cstr);
 
         rl.closeWindow();
     }
 
-    /// Renamed from `draw` to `queue` to better reflect its purpose.
-    /// This function now quickly adds a drawable item to a list for later processing.
+    /// This function adds a drawable item to a list for later processing.
     pub fn queue(self: *Renderer, drawable: Drawable) !void {
         try self.draw_queue.append(drawable);
     }
 
-    /// This new function performs all the drawing for the frame at once.
+    /// This function performs all the drawing for the frame at once.
     /// It should be called once per frame in your main game loop.
     pub fn present(self: *Renderer) void {
         rl.beginDrawing();
@@ -88,19 +81,7 @@ pub const Renderer = struct {
                     rl.drawText(t.message, t.x, t.y, t.size, t.color);
                 },
                 .texture => |t| {
-                    // DESIGN FLAW FIX: Use floating point math for the origin offset
-                    // to ensure smooth scaling and rotation.
-                    const origin = rl.Vector2{
-                        .x = (@as(f32, @floatFromInt(t.texture.width)) * t.scale) / 2.0,
-                        .y = (@as(f32, @floatFromInt(t.texture.height)) * t.scale) / 2.0,
-                    };
-                    const dest_rect = rl.Rectangle{
-                        .x = t.position.x,
-                        .y = t.position.y,
-                        .width = @as(f32, @floatFromInt(t.texture.width)) * t.scale,
-                        .height = @as(f32, @floatFromInt(t.texture.height)) * t.scale,
-                    };
-                    rl.drawTexturePro(t.texture, dest_rect, origin, t.rotation, t.tint);
+                    rl.drawTextureEx(t.texture, t.position, t.rotation, t.scale, t.tint);
                 },
                 .fps => |f| {
                     rl.drawFPS(f.x, f.y);

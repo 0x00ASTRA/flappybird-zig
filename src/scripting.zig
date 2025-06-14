@@ -1,4 +1,3 @@
-// scripting.zig
 const std = @import("std");
 const zlua = @import("zlua");
 const Lua = zlua.Lua;
@@ -39,18 +38,16 @@ fn draw_texture(lua: *Lua) c_int {
         return 0;
     }
 
-    // --- API DESIGN FIX: Get texture by string name ---
     const name = lua.toString(1) catch {
         std.debug.print("draw_texture error: argument 1 (name) must be a string.\n", .{});
         return 0;
     };
 
-    const texture_ptr = engine.asset_manager.getTexture(name) orelse {
+    const texture = engine.asset_manager.getTexture(name) orelse {
         std.debug.print("draw_texture warning: texture '{s}' not found.\n", .{name});
         return 0;
     };
 
-    // --- ROBUSTNESS FIX: Safely get numbers with defaults ---
     const x: f32 = @floatCast(lua.toNumber(2) catch 0);
     const y: f32 = @floatCast(lua.toNumber(3) catch 0);
     const rotation: f32 = @floatCast(lua.toNumber(4) catch 0.0);
@@ -60,10 +57,9 @@ fn draw_texture(lua: *Lua) c_int {
     const b: u8 = @as(u8, @intFromFloat(lua.toNumber(8) catch 255));
     const a: u8 = @as(u8, @intFromFloat(lua.toNumber(9) catch 255));
 
-    // --- DESIGN FIX: Use the renderer's queue ---
     engine.renderer.queue(.{
         .texture = .{
-            .texture = texture_ptr.*,
+            .texture = texture,
             .position = .{ .x = x, .y = y },
             .rotation = rotation,
             .scale = scale,
@@ -118,6 +114,7 @@ fn is_key_down(lua: *Lua) c_int {
         return 1;
     };
     const key_code = std.meta.stringToEnum(rl.KeyboardKey, key_name) orelse {
+        std.debug.print("no keycode with name: {s}\n", .{key_name});
         lua.pushBoolean(false);
         return 1;
     };
@@ -159,7 +156,6 @@ pub const Scripting = struct {
     pub fn setupBindings(self: *Scripting, engine_ptr: *Engine) !void {
         self.lua.newTable(); // Create the 'Engine' table
 
-        // Helper to add a function that needs engine access
         const addEngineFunc = struct {
             fn add(l: *Lua, ptr: *Engine, name: [:0]const u8, func: CFn) !void {
                 l.pushLightUserdata(ptr);
@@ -168,23 +164,13 @@ pub const Scripting = struct {
             }
         }.add;
 
-        // Helper to add a simple function with no context
-        const addSimpleFunc = struct {
-            fn add(l: *Lua, name: [:0]const u8, func: CFn) !void {
-                l.pushFunction(func);
-                l.setField(-2, name);
-            }
-        }.add;
-
         // --- Bind all functions to the 'Engine' table ---
         try addEngineFunc(self.lua, engine_ptr, "draw_texture", zlua.wrap(draw_texture));
         try addEngineFunc(self.lua, engine_ptr, "draw_circle", zlua.wrap(draw_circle));
 
-        try addSimpleFunc(self.lua, "is_key_down", zlua.wrap(is_key_down));
-        try addSimpleFunc(self.lua, "is_key_pressed", zlua.wrap(is_key_pressed));
-        try addSimpleFunc(self.lua, "log", zlua.wrap(log));
-
-        // API CLEANUP: The get_texture function is no longer needed.
+        try addEngineFunc(self.lua, engine_ptr, "is_key_down", zlua.wrap(is_key_down));
+        try addEngineFunc(self.lua, engine_ptr, "is_key_pressed", zlua.wrap(is_key_pressed));
+        try addEngineFunc(self.lua, engine_ptr, "log", zlua.wrap(log));
 
         self.lua.setGlobal("Engine"); // Set the table as a global
     }
