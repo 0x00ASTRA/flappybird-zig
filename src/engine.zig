@@ -1,92 +1,58 @@
 const std = @import("std");
 const zlua = @import("zlua");
 const Lua = zlua.Lua;
+const CallArgs = zlua.Lua.CallArgs;
 const render = @import("renderer.zig");
 const rl = @import("raylib");
-
-pub fn ping(lua: *Lua) c_int {
-    _ = lua;
-    std.debug.print("\x1b[32mpong\x1b[0m\n", .{});
-    return 0;
-}
-
-pub fn log(lua: *Lua) c_int {
-    var msg: [:0]const u8 = undefined;
-    msg = lua.toString(-1) catch unreachable;
-    std.debug.print("\x1b[34m[Debug]::Log: '{s}'\x1b[0m\n", .{msg});
-    return 0;
-}
+const scripting = @import("scripting.zig"); // New Import
+const asset_manager = @import("asset_manager.zig"); // New Import
 
 pub const Engine = struct {
     allocator: std.mem.Allocator,
-    lua: *Lua,
+    scripting: *scripting.Scripting, // Now holds a pointer to Scripting
     renderer: *render.Renderer,
-    textures: std.StringHashMap(rl.Texture2D),
+    asset_manager: *asset_manager.AssetManager, // Now holds a pointer to AssetManager
 
     pub fn init(allocator: std.mem.Allocator) !*Engine {
-        var lua = try Lua.init(allocator);
-        _ = lua.openLibs();
-        try lua.doFile("scripts/engine/init.lua");
+        var engine = try allocator.create(Engine);
 
+        engine.allocator = allocator;
+
+        // Initialize Renderer
         const r = try allocator.create(render.Renderer);
         r.* = try render.Renderer.init(allocator, "config/window.toml");
+        engine.renderer = r;
 
-        var en = try allocator.create(Engine);
-        en.* = Engine{
-            .allocator = allocator,
-            .lua = lua,
-            .renderer = r,
-            .textures = std.StringHashMap(rl.Texture2D).init(allocator),
-        };
+        // Initialize AssetManager
+        const am = try allocator.create(asset_manager.AssetManager);
+        am.* = try asset_manager.AssetManager.init(allocator);
+        engine.asset_manager = am;
 
-        var textures_dir = try std.fs.cwd().openDir("assets/textures/", .{ .iterate = true });
-        defer textures_dir.close();
+        // Initialize Scripting
+        const s = try allocator.create(scripting.Scripting);
+        s.* = try scripting.Scripting.init(allocator);
+        engine.scripting = s;
 
-        var iter = textures_dir.iterate();
-        while (try iter.next()) |f| {
-            if (f.kind == .file) {
-                const full_path_str = try std.fmt.allocPrintZ(allocator, "assets/textures/{s}", .{f.name});
-                defer allocator.free(full_path_str);
+        // Setup Lua bindings, passing the engine pointer so Lua functions can access engine components
+        try engine.scripting.setupBindings(engine);
 
-                const texture = blk: {
-                    if (rl.loadTexture(full_path_str)) |loaded_texture| {
-                        break :blk loaded_texture;
-                    } else |err| {
-                        std.debug.print("Failed to load texture: {s} with error '{s}'\n", .{ f.name, @errorName(err) });
+        // Load the main game script after bindings are set up
+        try engine.scripting.doFile("scripts/game/main.lua");
 
-                        // Allocate memory for the error message string
-                        const error_msg_buf = try std.fmt.allocPrintZ(allocator, "ERROR: {s}", .{f.name});
-                        defer allocator.free(error_msg_buf); // Ensure it's freed
-
-                        const error_image = rl.genImageText(20, 20, error_msg_buf);
-                        defer rl.unloadImage(error_image); // Unload the generated image data
-
-                        // loadTextureFromImage returns a Texture2D, so we can use it directly
-                        break :blk try rl.loadTextureFromImage(error_image);
-                    }
-                };
-                try en.textures.put(f.name, texture);
-                std.debug.print("Loaded Texture: {s}\n", .{f.name});
-            }
-        }
-
-        en.setupBindings();
-        try en.lua.doFile("test/test.lua");
-        return en;
+        return engine;
     }
+
     pub fn deinit(self: *Engine) void {
-        self.lua.deinit();
+        self.scripting.deinit();
+        self.allocator.destroy(self.scripting);
+
+        self.asset_manager.deinit();
+        self.allocator.destroy(self.asset_manager);
+
         self.renderer.deinit();
         self.allocator.destroy(self.renderer);
+
         self.allocator.destroy(self);
-    }
-
-    pub fn setupBindings(self: *Engine) void {
-        self.lua.pushFunction(zlua.wrap(ping));
-        self.lua.setGlobal("ping");
-
-        self.lua.pushFunction(zlua.wrap(log));
-        self.lua.setGlobal("log");
     }
 
     pub fn shouldClose(self: *Engine) bool {
@@ -95,58 +61,40 @@ pub const Engine = struct {
     }
 
     pub fn run(self: *Engine) !void {
-        const tx = self.textures.get("test.png").?;
-        const tex = tx;
-        var tick: u64 = 0;
-        // var rot_rate: f32 = 3; // 3 degrees per sec
-        var pos_x: i32 = 400;
-        var pos_y: i32 = 400;
-        var speed: i32 = 20;
+        // Attempt to get the Lua _init, _update, and _draw functions
+        if ((try self.scripting.lua.getGlobal("_init")) == .function) {
+            _ = self.scripting.lua.autoCall(void, "__init", .{}) catch |err| {
+                std.debug.print("Failed to call __init function at main.lua with err\n    \x1b[34m{}\x1b[0m\n", .{err});
+            }; // Call _init()
+            std.debug.print("Call __init()", .{});
+        } else {
+            self.scripting.lua.pop(1); // Pop the non-function value
+            std.debug.print("Warning: _init() function not found in Lua script.\n", .{});
+        }
 
         while (!self.shouldClose()) {
-
-            // #######################################
-            // #               Input                 #
-            // #######################################
-
-            if (rl.isKeyPressed(.left_shift)) {
-                const new_speed = speed + 1;
-                speed = std.math.clamp(new_speed, 0, 500);
+            // Call Lua's _update function
+            if ((try self.scripting.lua.getGlobal("_update")) == .function) {
+                _ = self.scripting.call(CallArgs{ .args = 0, .results = 0 }); // Call _update()
+                std.debug.print("Call __update()", .{});
+            } else {
+                self.scripting.lua.pop(1); // Pop the non-function value
+                std.debug.print("Warning: _update() function not found in Lua script. Game logic might not be updated.\n", .{});
             }
 
-            if (rl.isKeyPressed(.left_control)) {
-                const new_speed = speed - 1;
-                speed = std.math.clamp(new_speed, 0, 500);
+            // Call Lua's _draw function
+            rl.beginDrawing();
+            rl.clearBackground(.black); // Clear screen before Lua draws
+            if ((try self.scripting.lua.getGlobal("_draw")) == .function) {
+                _ = self.scripting.call(CallArgs{ .args = 0, .results = 0 }); // Call _draw()
+                std.debug.print("Call __draw()", .{});
+            } else {
+                self.scripting.lua.pop(1); // Pop the non-function value
+                std.debug.print("Warning: _draw() function not found in Lua script. Nothing will be drawn.\n", .{});
             }
 
-            if (rl.isKeyDown(.down)) {
-                const new_pos_y = pos_y + speed;
-                pos_y = std.math.clamp(new_pos_y, 30, 770);
-            }
-
-            if (rl.isKeyDown(.up)) {
-                const new_pos_y = pos_y - speed;
-                pos_y = std.math.clamp(new_pos_y, 30, 770);
-            }
-
-            if (rl.isKeyDown(.right)) {
-                const new_pos_x = pos_x + speed;
-                pos_x = std.math.clamp(new_pos_x, 30, 770);
-            }
-
-            if (rl.isKeyDown(.left)) {
-                const new_pos_x = pos_x - speed;
-                pos_x = std.math.clamp(new_pos_x, 30, 770);
-            }
-
-            const tick_msg: [:0]const u8 = std.fmt.allocPrintZ(self.allocator, "tick: {}", .{tick}) catch "error";
-            self.renderer.draw(@constCast(&[_]render.Drawable{
-                render.Drawable{ .texture = .{ .texture = tex, .position = .{ .x = 400, .y = 400 }, .rotation = 0, .scale = 0.5, .tint = .white } },
-                render.Drawable{ .circle = .{ .x = pos_x, .y = pos_y, .radius = 30.0, .color = .red } },
-                render.Drawable{ .text = .{ .message = tick_msg, .x = 5, .y = 5, .size = 11, .color = .red } },
-                render.Drawable{ .fps = .{ .x = 5, .y = 17 } },
-            }));
-            tick += 1;
+            rl.drawFPS(5, 17); // Draw FPS from Zig
+            rl.endDrawing();
         }
     }
 };
