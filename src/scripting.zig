@@ -72,6 +72,8 @@ fn draw_texture(lua: *Lua) c_int {
     return 0;
 }
 
+/// Takes in the filename and scale of a texture, returns the width of the texture, scaled.
+/// Lua API: Engine:get_texture_width(filename, scale)
 fn get_texture_width(lua: *Lua) c_int {
     const engine = getEngine(lua) catch |err| {
         std.debug.print("get_texture_width error: could not get engine pointer: {s}\n", .{@errorName(err)});
@@ -94,6 +96,8 @@ fn get_texture_width(lua: *Lua) c_int {
     return 1;
 }
 
+/// Takes in the filename and scale of a texture, returns the height of the texture, scaled.
+/// Lua API: Engine:get_texture_height(filename, scale)
 fn get_texture_height(lua: *Lua) c_int {
     const engine = getEngine(lua) catch |err| {
         std.debug.print("get_texture_height error: could not get engine pointer: {s}\n", .{@errorName(err)});
@@ -213,12 +217,20 @@ pub const Scripting = struct {
         try addEngineFunc(self.lua, engine_ptr, "get_texture_width", zlua.wrap(get_texture_width));
         try addEngineFunc(self.lua, engine_ptr, "get_texture_height", zlua.wrap(get_texture_height));
         try addEngineFunc(self.lua, engine_ptr, "draw_circle", zlua.wrap(draw_circle));
-
-        try addEngineFunc(self.lua, engine_ptr, "is_key_down", zlua.wrap(is_key_down));
-        try addEngineFunc(self.lua, engine_ptr, "is_key_pressed", zlua.wrap(is_key_pressed));
         try addEngineFunc(self.lua, engine_ptr, "log", zlua.wrap(log));
-
         self.lua.setGlobal("Engine"); // Set the table as a global
+
+        self.lua.newTable();
+        const addInputFunc = struct {
+            fn add(l: *Lua, name: [:0]const u8, func: CFn) !void {
+                l.pushFunction(func);
+                l.setField(-2, name);
+            }
+        }.add;
+
+        try addInputFunc(self.lua, "is_key_down", zlua.wrap(is_key_down));
+        try addInputFunc(self.lua, "is_key_pressed", zlua.wrap(is_key_pressed));
+        self.lua.setGlobal("Input");
     }
 
     pub fn doString(self: *Scripting, code: []const u8) !void {

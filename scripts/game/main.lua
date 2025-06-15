@@ -1,6 +1,6 @@
 local player_x = 400
 local player_y = 400
-local player_scale = 0.25
+local player_scale = 0.125
 local player_width = Engine.get_texture_width("test.png", player_scale)
 local player_height = Engine.get_texture_height("test.png", player_scale)
 print(player_height)
@@ -16,29 +16,29 @@ end
 function _update()
     game_tick = game_tick + 1
 
-    if Engine.is_key_pressed("left_shift") then
+    if Input.is_key_pressed("left_shift") then
         player_speed = math.min(player_speed + 1, 500)
         Engine.log("Speed increased to: " .. player_speed)
     end
 
-    if Engine.is_key_pressed("left_control") then
+    if Input.is_key_pressed("left_control") then
         player_speed = math.max(player_speed - 1, 0)
         Engine.log("Speed decreased to: " .. player_speed)
     end
 
-    if Engine.is_key_down("s") then
+    if Input.is_key_down("s") then
         player_y = math.min(player_y + player_speed, 800 - (player_height / 2))
     end
 
-    if Engine.is_key_down("w") then
+    if Input.is_key_down("w") then
         player_y = math.max(player_y - player_speed, player_height / 2)
     end
 
-    if Engine.is_key_down("d") then
+    if Input.is_key_down("d") then
         player_x = math.min(player_x + player_speed, 800 - (player_width / 2))
     end
 
-    if Engine.is_key_down("a") then
+    if Input.is_key_down("a") then
         player_x = math.max(player_x - player_speed, player_width / 2)
     end
 end
