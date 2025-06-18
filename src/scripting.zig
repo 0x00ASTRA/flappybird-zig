@@ -24,6 +24,16 @@ fn getEngine(lua: *Lua) !*Engine {
     return lua.toUserdata(Engine, Lua.upvalueIndex(1));
 }
 
+fn getFrameTime(lua: *Lua) c_int {
+    const engine = getEngine(lua) catch |err| {
+        std.debug.print("draw_texture error: could not get engine pointer: {s}\n", .{@errorName(err)});
+        return 0;
+    };
+    const delta: f32 = engine.renderer.get_frame_time();
+    lua.pushNumber(delta);
+    return 1;
+}
+
 /// Logs a message from Lua to the console.
 /// Lua API: Engine:log(message: string)
 fn log(lua: *Lua) c_int {
@@ -309,6 +319,35 @@ fn draw_rectangle(lua: *Lua) c_int {
     return 0;
 }
 
+fn draw_text(lua: *Lua) c_int {
+    const engine = getEngine(lua) catch |err| {
+        std.debug.print("draw_text error: could not get engine pointer: {s}\n", .{@errorName(err)});
+        return 0;
+    };
+
+    if (lua.getTop() < 8) {
+        std.debug.print("draw_text error: 8 arguments required.\n", .{});
+        return 0;
+    }
+
+    const msg: [:0]const u8 = lua.toString(1) catch "";
+    const x: i32 = @intFromFloat(lua.toNumber(2) catch 0);
+    const y: i32 = @intFromFloat(lua.toNumber(3) catch 0);
+    const size: i32 = @intFromFloat(lua.toNumber(4) catch 0);
+    const r: u8 = @as(u8, @intFromFloat(lua.toNumber(5) catch 255));
+    const g: u8 = @as(u8, @intFromFloat(lua.toNumber(6) catch 255));
+    const b: u8 = @as(u8, @intFromFloat(lua.toNumber(7) catch 255));
+    const a: u8 = @as(u8, @intFromFloat(lua.toNumber(8) catch 255));
+
+    engine.renderer.queue(.{
+        .text = .{ .message = msg, .x = x, .y = y, .size = size, .color = rl.Color.init(r, g, b, a) },
+    }) catch |err| {
+        std.debug.print("draw_text error: failed to queue drawable: {s}", .{@errorName(err)});
+    };
+
+    return 0;
+}
+
 // ##################################################
 // #                   INPUT                        #
 // ##################################################
@@ -379,7 +418,9 @@ pub const Scripting = struct {
         try addEngineFunc(self.lua, engine_ptr, "get_texture_height", zlua.wrap(get_texture_height));
         try addEngineFunc(self.lua, engine_ptr, "draw_circle", zlua.wrap(draw_circle));
         try addEngineFunc(self.lua, engine_ptr, "draw_rect", zlua.wrap(draw_rectangle));
+        try addEngineFunc(self.lua, engine_ptr, "draw_text", zlua.wrap(draw_text));
         try addEngineFunc(self.lua, engine_ptr, "log", zlua.wrap(log));
+        try addEngineFunc(self.lua, engine_ptr, "get_frame_time", zlua.wrap(getFrameTime));
         self.lua.setGlobal("Engine");
 
         self.lua.newTable();

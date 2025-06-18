@@ -60,6 +60,11 @@ pub const Renderer = struct {
         try self.draw_queue.append(drawable);
     }
 
+    pub fn get_frame_time(self: *@This()) f32 {
+        _ = self;
+        return rl.getFrameTime();
+    }
+
     /// This function performs all the drawing for the frame at once.
     /// It should be called once per frame in your main game loop.
     pub fn present(self: *Renderer) void {
