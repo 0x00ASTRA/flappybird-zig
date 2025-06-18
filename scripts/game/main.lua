@@ -23,7 +23,7 @@ local score = 0
 local pipes = {}
 local pipe_gap = 120 -- Vertical gap between top and bottom pipes
 local pipe_width = 70
-local pipe_speed = 150 -- Pixels per second
+local pipe_speed = 250 -- Pixels per second
 local pipe_spawn_interval = 2 -- Seconds between pipe spawns
 local time_since_last_pipe = 0
 local PIPE_MIN_HEIGHT = 50
@@ -68,10 +68,18 @@ local function spawn_pipe()
         rect = Rect.new(pipe_x, 0, pipe_width, top_pipe_height),
         passed = false -- Flag to check if player passed this pipe for scoring
     })
+    table.insert(pipes, {
+        rect = Rect.new(pipe_x - (pipe_width * 0.25), top_pipe_height - pipe_width, pipe_width * 1.5, pipe_width),
+        passed = true,
+    })
     -- Bottom pipe
     table.insert(pipes, {
         rect = Rect.new(pipe_x, bottom_pipe_y, pipe_width, SCREEN_HEIGHT - bottom_pipe_y - GROUND_HEIGHT),
         passed = false
+    })
+    table.insert(pipes, {
+        rect = Rect.new(pipe_x - (pipe_width * 0.25), bottom_pipe_y, pipe_width * 1.5, pipe_width),
+        passed = true,
     })
     Engine.log("Pipe spawned!")
 end
@@ -157,6 +165,7 @@ end
 
 -- The _draw function is called every frame for rendering
 function _draw()
+    Engine.draw_texture("clouds.png", 0, 0, 0.0, 1.0, 255,255,255,255)
     Engine.draw_texture(player_texture, player_x, player_y, 0.0, player_scale, player_color_r, player_color_g, player_color_b, player_color_a)
 
     -- Draw pipes
