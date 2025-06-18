@@ -59,7 +59,7 @@ pub const Engine = struct {
     pub fn shouldClose(self: *Engine) bool {
         _ = self;
         return rl.windowShouldClose();
-    }
+    } 
 
     pub fn run(self: *Engine) !void {
         // --- Attempt to get and call Lua's _init function ---

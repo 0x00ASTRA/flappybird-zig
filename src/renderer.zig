@@ -81,8 +81,8 @@ pub const Renderer = struct {
                     rl.drawText(t.message, t.x, t.y, t.size, t.color);
                 },
                 .texture => |t| {
-                    const center_pos: rl.Vector2 = rl.Vector2{ .x = t.position.x - (@as(f32, @floatFromInt(@divFloor(t.texture.width, 2))) * t.scale), .y = t.position.y - (@as(f32, @floatFromInt(@divFloor(t.texture.width, 2))) * t.scale) };
-                    rl.drawTextureEx(t.texture, center_pos, t.rotation, t.scale, t.tint);
+                    // const center_pos: rl.Vector2 = rl.Vector2{ .x = t.position.x - (@as(f32, @floatFromInt(@divFloor(t.texture.width, 2))) * t.scale), .y = t.position.y - (@as(f32, @floatFromInt(@divFloor(t.texture.width, 2))) * t.scale) };
+                    rl.drawTextureEx(t.texture, rl.Vector2.init(t.position.x, t.position.y), t.rotation, t.scale, t.tint);
                 },
                 .fps => |f| {
                     rl.drawFPS(f.x, f.y);
